@@ -99,6 +99,28 @@ amdgpu_free_userqueue(amdgpu_device_handle dev, uint32_t queue_id)
 }
 
 drm_public int
+amdgpu_query_userqueue(amdgpu_device_handle dev, uint32_t queue_id,
+		      uint32_t *flags)
+{
+	union drm_amdgpu_userq userq;
+	int r;
+
+	if (!dev || !flags)
+		return -EINVAL;
+
+	memset(&userq, 0, sizeof(userq));
+	userq.in.op = AMDGPU_USERQ_OP_QUERY_STATUS;
+	userq.in.queue_id = queue_id;
+
+	r = drmCommandWriteRead(dev->fd, DRM_AMDGPU_USERQ,
+				&userq, sizeof(userq));
+	if (!r)
+		*flags = userq.out_qs.flags;
+
+	return r;
+}
+
+drm_public int
 amdgpu_userq_signal(amdgpu_device_handle dev,
 		    struct drm_amdgpu_userq_signal *signal_data)
 {

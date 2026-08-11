@@ -2075,6 +2075,24 @@ int amdgpu_create_userqueue(amdgpu_device_handle dev,
 int amdgpu_free_userqueue(amdgpu_device_handle dev, uint32_t queue_id);
 
 /**
+ * Query userqueue status.
+ *
+ * \param   dev		- \c [in] device handle
+ * \param   queue_id	- \c [in]  queue id
+ * \param   flags		- \c [out] AMDGPU_USERQ_QUERY_STATUS_FLAGS_* bitmask;
+ *                          unchanged on failure. Must not be NULL.
+ *
+ * BROKEN reports a hung or guilty queue, an invalid userq VA, or VRAM loss
+ * indicated by a VM generation change. Broken queues must be recreated;
+ * guilt remains sticky across resets. RESET_IN_PROGRESS reports an ongoing
+ * GPU reset. Both flags may be set at the same time.
+ *
+ * \return  0 on success, otherwise a negative POSIX error code
+ */
+int amdgpu_query_userqueue(amdgpu_device_handle dev, uint32_t queue_id,
+			  uint32_t *flags);
+
+/**
  * Signal USERQUEUE
  * \param   dev               - \c [in] device handle
  * \param   signal_data       - \c [in] pointer to struct drm_amdgpu_userq_signal
