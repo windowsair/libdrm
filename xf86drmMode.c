@@ -35,6 +35,7 @@
 #include <dirent.h>
 #include <unistd.h>
 #include <errno.h>
+#include <time.h>
 
 #define memclear(s) memset(&s, 0, sizeof(s))
 
@@ -381,6 +382,128 @@ drm_public drmModeCrtcPtr drmModeGetCrtc(int fd, uint32_t crtcId)
 	r->buffer_id       = crtc.fb_id;
 	r->gamma_size      = crtc.gamma_size;
 	return r;
+}
+
+drm_public drmModeCrtcListPtr drmModeGetCrtcList(int fd)
+{
+	drmModeResPtr res;
+	drmModeCrtcListPtr list;
+	uint64_t *seq0 = NULL;
+	char *probe = NULL;
+	int need_probe = 0;
+	int i;
+
+	res = drmModeGetResources(fd);
+	if (!res)
+		return NULL;
+
+	list = drmMalloc(sizeof(*list));
+	if (!list)
+		goto err_res;
+
+	list->count = res->count_crtcs;
+	list->count_available = 0;
+
+	if (res->count_crtcs) {
+		list->crtcs = drmMalloc(res->count_crtcs * sizeof(*list->crtcs));
+		if (!list->crtcs)
+			goto err_list;
+		seq0 = drmMalloc(res->count_crtcs * sizeof(*seq0));
+		probe = drmMalloc(res->count_crtcs * sizeof(*probe));
+		if (!seq0 || !probe)
+			goto err_probe;
+	}
+
+	for (i = 0; i < res->count_crtcs; i++) {
+		drmModeCrtcInfoPtr info = &list->crtcs[i];
+		drmModeCrtcPtr crtc = drmModeGetCrtc(fd, res->crtcs[i]);
+
+		info->crtc_id = res->crtcs[i];
+		info->index = i;
+
+		if (!crtc) {
+			/* Unreadable CRTC: report as busy so callers don't grab it. */
+			info->in_use = 1;
+			continue;
+		}
+
+		info->buffer_id = crtc->buffer_id;
+		if (crtc->mode_valid) {
+			info->in_use = 1;
+			info->width = crtc->width;
+			info->height = crtc->height;
+			info->mode = crtc->mode;
+		} else {
+			/*
+			 * GETCRTC only tells us which pipes are enabled through
+			 * KMS, not which are active in hardware. A pipe can be
+			 * active (scanning out) without being enabled here, and
+			 * an active pipe keeps its vblank counter advancing.
+			 * Snapshot the vblank sequence now and re-check it below
+			 * to find such active pipes.
+			 */
+			uint64_t ns;
+
+			if (!drmCrtcGetSequence(fd, info->crtc_id, &seq0[i], &ns)) {
+				probe[i] = 1;
+				need_probe = 1;
+			}
+		}
+
+		drmModeFreeCrtc(crtc);
+	}
+
+	/*
+	 * One shared wait covers every candidate: an active pipe keeps
+	 * advancing its vblank counter, an inactive pipe does not. 50ms
+	 * crosses at least one vblank down to ~24Hz.
+	 */
+	if (need_probe) {
+		struct timespec ts = { .tv_sec = 0, .tv_nsec = 50000000 };
+
+		nanosleep(&ts, NULL);
+
+		for (i = 0; i < res->count_crtcs; i++) {
+			uint64_t seq1, ns;
+
+			if (!probe[i])
+				continue;
+			if (drmCrtcGetSequence(fd, list->crtcs[i].crtc_id,
+					       &seq1, &ns))
+				continue;
+			if (seq1 != seq0[i])
+				list->crtcs[i].driver_active = 1;
+		}
+	}
+
+	for (i = 0; i < res->count_crtcs; i++) {
+		if (!list->crtcs[i].in_use && !list->crtcs[i].driver_active)
+			list->count_available++;
+	}
+
+	drmFree(probe);
+	drmFree(seq0);
+	drmModeFreeResources(res);
+	return list;
+
+err_probe:
+	drmFree(probe);
+	drmFree(seq0);
+	drmFree(list->crtcs);
+err_list:
+	drmFree(list);
+err_res:
+	drmModeFreeResources(res);
+	return NULL;
+}
+
+drm_public void drmModeFreeCrtcList(drmModeCrtcListPtr ptr)
+{
+	if (!ptr)
+		return;
+
+	drmFree(ptr->crtcs);
+	drmFree(ptr);
 }
 
 drm_public int drmModeSetCrtc(int fd, uint32_t crtcId, uint32_t bufferId,

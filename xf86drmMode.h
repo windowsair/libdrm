@@ -147,6 +147,30 @@ typedef struct _drmModeCrtc {
 
 } drmModeCrtc, *drmModeCrtcPtr;
 
+/**
+ * Per-CRTC availability information, produced by drmModeGetCrtcList().
+ */
+typedef struct _drmModeCrtcInfo {
+	uint32_t crtc_id;   /**< KMS object id of the CRTC */
+	int index;          /**< Index in drmModeRes.crtcs[]; usable for vblank high-crtc bits */
+	int in_use;         /**< Non-zero if userspace has a mode set on this CRTC */
+	int driver_active;  /**< Non-zero if the CRTC is active in hardware (its
+			     *   vblank is running) even though it is not enabled
+			     *   through KMS. GETCRTC only reports enabled pipes;
+			     *   reading the vblank counter reveals active pipes,
+			     *   which must not be treated as free. */
+	uint32_t buffer_id; /**< FB currently scanned out, 0 if none */
+	uint32_t width, height; /**< Active mode resolution, 0 when not in use */
+	drmModeModeInfo mode;   /**< Active mode; valid only when in_use is set */
+} drmModeCrtcInfo, *drmModeCrtcInfoPtr;
+
+typedef struct _drmModeCrtcList {
+	int count;                /**< Total number of CRTCs on the device */
+	int count_available;      /**< CRTCs that are free and assignable (neither
+				   *   in_use nor driver_active) */
+	drmModeCrtcInfoPtr crtcs; /**< Array of 'count' CRTC entries */
+} drmModeCrtcList, *drmModeCrtcListPtr;
+
 typedef struct _drmModeEncoder {
 	uint32_t encoder_id;
 	uint32_t encoder_type;
@@ -316,6 +340,20 @@ extern int drmModeDirtyFB(int fd, uint32_t bufferId,
  * Retrieve information about the ctrt crtcId
  */
 extern drmModeCrtcPtr drmModeGetCrtc(int fd, uint32_t crtcId);
+
+/**
+ * Enumerate every CRTC on the device and report which ones are available.
+ *
+ * Convenience wrapper around drmModeGetResources() + drmModeGetCrtc() intended
+ * for compositors that need to discover free CRTCs. The returned list must be
+ * released with drmModeFreeCrtcList(). Returns NULL on error.
+ */
+extern drmModeCrtcListPtr drmModeGetCrtcList(int fd);
+
+/**
+ * Free a list previously returned by drmModeGetCrtcList().
+ */
+extern void drmModeFreeCrtcList(drmModeCrtcListPtr ptr);
 
 /**
  * Set the mode on a crtc crtcId with the given mode modeId.
