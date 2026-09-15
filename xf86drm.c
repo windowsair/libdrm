@@ -2,33 +2,14 @@
  * \file xf86drm.c
  * User-level interface to DRM device
  *
- * \author Rickard E. (Rik) Faith <faith@valinux.com>
- * \author Kevin E. Martin <martin@valinux.com>
  */
 
 /*
- * Copyright 1999 Precision Insight, Inc., Cedar Park, Texas.
- * Copyright 2000 VA Linux Systems, Inc., Sunnyvale, California.
- * All Rights Reserved.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * PRECISION INSIGHT AND/OR ITS SUPPLIERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
- * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
- * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
- * DEALINGS IN THE SOFTWARE.
+ * SPDX-FileContributor: Rickard E. (Rik) Faith <faith@valinux.com>
+ * SPDX-FileContributor: Kevin E. Martin <martin@valinux.com>
+ * SPDX-FileCopyrightText: 1999 Precision Insight, Inc., Cedar Park, Texas.
+ * SPDX-FileCopyrightText: 2000 VA Linux Systems, Inc., Sunnyvale, California.
+ * SPDX-License-Identifier: MIT
  */
 
 #include <stdio.h>
@@ -1202,7 +1183,7 @@ static int drmOpenByName(const char *name, int type)
         if ((fd = open(proc_name, O_RDONLY)) >= 0) {
             retcode = read(fd, buf, sizeof(buf)-1);
             close(fd);
-            if (retcode) {
+            if (retcode > 0) {
                 buf[retcode-1] = '\0';
                 for (driver = pt = buf; *pt && *pt != ' '; ++pt)
                     ;
@@ -1690,7 +1671,7 @@ drm_public int drmMarkBufs(int fd, double low, double high)
     if (!info.count)
         return -EINVAL;
 
-    if (!(info.list = drmMalloc(info.count * sizeof(*info.list))))
+    if (!(info.list = calloc(info.count, sizeof(*info.list))))
         return -ENOMEM;
 
     if (drmIoctl(fd, DRM_IOCTL_INFO_BUFS, &info)) {
@@ -1828,7 +1809,7 @@ drm_public drmBufInfoPtr drmGetBufInfo(int fd)
         return NULL;
 
     if (info.count) {
-        if (!(info.list = drmMalloc(info.count * sizeof(*info.list))))
+        if (!(info.list = calloc(info.count, sizeof(*info.list))))
             return NULL;
 
         if (drmIoctl(fd, DRM_IOCTL_INFO_BUFS, &info)) {
@@ -1838,7 +1819,7 @@ drm_public drmBufInfoPtr drmGetBufInfo(int fd)
 
         retval = drmMalloc(sizeof(*retval));
         retval->count = info.count;
-        if (!(retval->list = drmMalloc(info.count * sizeof(*retval->list)))) {
+        if (!(retval->list = calloc(info.count, sizeof(*retval->list)))) {
                 drmFree(retval);
                 drmFree(info.list);
                 return NULL;
@@ -1884,7 +1865,7 @@ drm_public drmBufMapPtr drmMapBufs(int fd)
     if (!bufs.count)
         return NULL;
 
-    if (!(bufs.list = drmMalloc(bufs.count * sizeof(*bufs.list))))
+    if (!(bufs.list = calloc(bufs.count, sizeof(*bufs.list))))
         return NULL;
 
     if (drmIoctl(fd, DRM_IOCTL_MAP_BUFS, &bufs)) {
@@ -1894,7 +1875,7 @@ drm_public drmBufMapPtr drmMapBufs(int fd)
 
     retval = drmMalloc(sizeof(*retval));
     retval->count = bufs.count;
-    retval->list  = drmMalloc(bufs.count * sizeof(*retval->list));
+    retval->list  = calloc(bufs.count, sizeof(*retval->list));
     for (i = 0; i < bufs.count; i++) {
         retval->list[i].idx     = bufs.list[i].idx;
         retval->list[i].total   = bufs.list[i].total;
@@ -2041,9 +2022,9 @@ drm_public drm_context_t *drmGetReservedContextList(int fd, int *count)
     if (!res.count)
         return NULL;
 
-    if (!(list   = drmMalloc(res.count * sizeof(*list))))
+    if (!(list   = calloc(res.count, sizeof(*list))))
         return NULL;
-    if (!(retval = drmMalloc(res.count * sizeof(*retval))))
+    if (!(retval = calloc(res.count, sizeof(*retval))))
         goto err_free_list;
 
     res.contexts = list;
