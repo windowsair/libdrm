@@ -397,6 +397,9 @@ drmGetFormatModifierNameFromAmd(uint64_t modifier)
         return NULL;
 
     switch (tile_version) {
+    case AMD_FMT_MOD_TILE_VER_GFX6:
+        fprintf(fp, "GFX6");
+        break;
     case AMD_FMT_MOD_TILE_VER_GFX9:
         fprintf(fp, "GFX9");
         break;
@@ -429,7 +432,7 @@ drmGetFormatModifierNameFromAmd(uint64_t modifier)
 
             /* Other DCC fields are unused by GFX12. */
         }
-    } else {
+    } else if (tile_version >= AMD_FMT_MOD_TILE_VER_GFX9) {
         unsigned tile = AMD_FMT_MOD_GET(TILE, modifier);
 
         fprintf(fp, ",%s", gfx9_gfx11_tile_strings[tile]);
@@ -491,6 +494,93 @@ drmGetFormatModifierNameFromAmd(uint64_t modifier)
             if (AMD_FMT_MOD_GET(DCC_RETILE, modifier))
                 fprintf(fp, ",DCC_RETILE");
         }
+    } else {
+        /* Not all of these are exposed, but have them here for the sake of completeness. */
+        static const char *const gfx6_tile_strings[AMD_FMT_MOD_TILE_MASK + 1] = {
+            "LINEAR_GENERAL",
+            "LINEAR_ALIGNED",
+            [AMD_FMT_MOD_TILE_GFX6_1D_TILED_THIN1] = "1D", /* 1D_TILED_THIN1 */
+            "1D_TILED_THICK",
+            [AMD_FMT_MOD_TILE_GFX6_2D_TILED_THIN1] = "2D", /* 2D_TILED_THIN1 */
+            "PRT_TILED_THIN1",
+            "PRT_2D_TILED_THIN1",
+            "2D_TILED_THICK",
+            "2D_TILED_XTHICK",
+            "PRT_TILED_THICK",
+            "PRT_2D_TILED_THICK",
+            "PRT_3D_TILED_THIN1",
+            "3D_TILED_THIN1",
+            "3D_TILED_THICK",
+            "3D_TILED_XTHICK",
+            "PRT_3D_TILED_THICK",
+        };
+        static const char *const gfx6_microtile_strings[AMD_FMT_MOD_MICROTILE_MASK + 1] = {
+            [AMD_FMT_MOD_MICROTILE_DISPLAY] = "D", /* DISPLAY */
+            [AMD_FMT_MOD_MICROTILE_THIN] = NULL, /* THIN - not printed */
+            "DEPTH", /* not exposed */
+            "ROTATED", /* not exposed */
+            "THICK", /* not exposed */
+        };
+        static const char *const gfx6_pipe_config_strings[AMD_FMT_MOD_PIPE_CONFIG_MASK + 1] = {
+            [AMD_FMT_MOD_PIPE_CONFIG_P2] = "P2",
+            [AMD_FMT_MOD_PIPE_CONFIG_P4_8x16] = "P4_8x16",
+            [AMD_FMT_MOD_PIPE_CONFIG_P4_16x16] = "P4_16x16",
+            [AMD_FMT_MOD_PIPE_CONFIG_P4_16x32] = "P4_16x32",
+            [AMD_FMT_MOD_PIPE_CONFIG_P4_32x32] = "P4_32x32",
+            [AMD_FMT_MOD_PIPE_CONFIG_P8_16x16_8x16] = "P8_16x16_8x16",
+            [AMD_FMT_MOD_PIPE_CONFIG_P8_16x32_8x16] = "P8_16x32_8x16",
+            [AMD_FMT_MOD_PIPE_CONFIG_P8_32x32_8x16] = "P8_32x32_8x16",
+            [AMD_FMT_MOD_PIPE_CONFIG_P8_16x32_16x16] = "P8_16x32_16x16",
+            [AMD_FMT_MOD_PIPE_CONFIG_P8_32x32_16x16] = "P8_32x32_16x16",
+            [AMD_FMT_MOD_PIPE_CONFIG_P8_32x32_16x32] = "P8_32x32_16x32",
+            [AMD_FMT_MOD_PIPE_CONFIG_P8_32x64_32x32] = "P8_32x64_32x32",
+            [AMD_FMT_MOD_PIPE_CONFIG_P16_32x32_8x16] = "P16_32x32_8x16",
+            [AMD_FMT_MOD_PIPE_CONFIG_P16_32x32_16x16] = "P16_32x32_16x16",
+        };
+        static const char *const gfx6_tile_split_strings[AMD_FMT_MOD_TILE_SPLIT_MASK + 1] = {
+            "64B",
+            "128B",
+            "256B",
+            "512B",
+            "1K",
+            "2K",
+            "4K",
+            "RESERVED_8K", /* not actually supported */
+        };
+        static const char *const gfx6_macro_tile_aspect_strings[AMD_FMT_MOD_MACRO_TILE_ASPECT_MASK + 1] = {
+            "1:1",
+            "4:1",
+            "16:1",
+            "64:1",
+        };
+
+        const uint32_t tile = AMD_FMT_MOD_GET(TILE, modifier);
+        const uint32_t microtile = AMD_FMT_MOD_GET(MICROTILE, modifier);
+
+        fprintf(fp, ",%s", gfx6_tile_strings[tile]);
+
+        if (gfx6_microtile_strings[microtile])
+            fprintf(fp, ",%s", gfx6_microtile_strings[microtile]);
+
+        if (AMD_FMT_MOD_GET(DCC, modifier))
+            fprintf(fp, ",DCC");
+
+        if (tile >= AMD_FMT_MOD_TILE_GFX6_2D_TILED_THIN1) {
+            const uint32_t pipe_config = AMD_FMT_MOD_GET(PIPE_CONFIG, modifier);
+            const uint32_t tile_split_idx = AMD_FMT_MOD_GET(TILE_SPLIT, modifier);
+            const uint32_t num_banks = 2 << AMD_FMT_MOD_GET(NUM_BANKS, modifier);
+            const uint32_t bank_width = 1 << AMD_FMT_MOD_GET(BANK_WIDTH, modifier);
+            const uint32_t bank_height = 1 << AMD_FMT_MOD_GET(BANK_HEIGHT, modifier);
+            const uint32_t macro_tile_aspect_idx = AMD_FMT_MOD_GET(MACRO_TILE_ASPECT, modifier);
+
+            fprintf(fp, ",%s,TS_%s,BANK%ux%u_%u,%s",
+                gfx6_pipe_config_strings[pipe_config],
+                gfx6_tile_split_strings[tile_split_idx],
+                bank_width, bank_height, num_banks,
+                gfx6_macro_tile_aspect_strings[macro_tile_aspect_idx]);
+        }
+
+
     }
 
     fclose(fp);
