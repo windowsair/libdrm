@@ -4,7 +4,9 @@
  * SPDX-FileContributor: Rickard E. (Rik) Faith <faith@valinux.com>
  */
 
-typedef struct RandomState {
+#include "xf86drm.h"
+
+typedef DRM_DEPRECATED struct RandomState {
     unsigned long magic;
     unsigned long a;
     unsigned long m;
