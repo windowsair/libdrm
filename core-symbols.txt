@@ -119,6 +119,7 @@ drmModeDirtyFB
 drmModeFormatModifierBlobIterNext
 drmModeFreeConnector
 drmModeFreeCrtc
+drmModeFreeCrtcList
 drmModeFreeEncoder
 drmModeFreeFB
 drmModeFreeFB2
@@ -133,6 +134,7 @@ drmModeGetConnector
 drmModeGetConnectorCurrent
 drmModeGetConnectorTypeName
 drmModeGetCrtc
+drmModeGetCrtcList
 drmModeGetEncoder
 drmModeGetFB
 drmModeGetFB2

@@ -69,6 +69,15 @@ drmdevice = executable(
   install : with_install_tests,
 )
 
+crtclist = executable(
+  'crtclist',
+  files('crtclist.c'),
+  include_directories : [inc_root, inc_drm],
+  link_with : libdrm,
+  c_args : libdrm_c_args,
+  install : with_install_tests,
+)
+
 test('hash', hash)
 test('drmsl', drmsl)
 test('drmdevice', drmdevice)
