@@ -326,6 +326,7 @@ union drm_amdgpu_ctx {
 /* user queue IOCTL operations */
 #define AMDGPU_USERQ_OP_CREATE	1
 #define AMDGPU_USERQ_OP_FREE	2
+#define AMDGPU_USERQ_OP_QUERY_STATUS	3
 
 /* queue priority levels */
 #define AMDGPU_USERQ_CREATE_FLAGS_QUEUE_PRIORITY_MASK  0x3
@@ -337,18 +338,23 @@ union drm_amdgpu_ctx {
 /* for queues that need access to protected content */
 #define AMDGPU_USERQ_CREATE_FLAGS_QUEUE_SECURE  (1 << 2)
 
+/* the queue is broken because it is hung, has an invalid VA, or VRAM was lost */
+#define AMDGPU_USERQ_QUERY_STATUS_FLAGS_BROKEN  (1 << 0)
+/* indicate that a GPU reset has not completed yet */
+#define AMDGPU_USERQ_QUERY_STATUS_FLAGS_RESET_IN_PROGRESS (1 << 1)
+
 /*
  * This structure is a container to pass input configuration
  * info for all supported userqueue related operations.
  * For operation AMDGPU_USERQ_OP_CREATE: user is expected
  *  to set all fields, excep the parameter 'queue_id'.
- * For operation AMDGPU_USERQ_OP_FREE: the only input parameter expected
- *  to be set is 'queue_id', eveything else is ignored.
+ * For operations AMDGPU_USERQ_OP_FREE and AMDGPU_USERQ_OP_QUERY_STATUS:
+ *  only 'op' and 'queue_id' should be set; all other fields must be zero.
  */
 struct drm_amdgpu_userq_in {
 	/** AMDGPU_USERQ_OP_* */
 	__u32	op;
-	/** Queue id passed for operation USERQ_OP_FREE */
+	/** Queue id passed for operations USERQ_OP_FREE and USERQ_OP_QUERY_STATUS */
 	__u32	queue_id;
 	/** the target GPU engine to execute workload (AMDGPU_HW_IP_*) */
 	__u32   ip_type;
@@ -419,9 +425,16 @@ struct drm_amdgpu_userq_out {
 	__u32	_pad;
 };
 
+/* The structure to carry output of userqueue ops */
+struct drm_amdgpu_userq_out_query_state {
+	__u32 flags;
+	__u32 _pad;
+};
+
 union drm_amdgpu_userq {
 	struct drm_amdgpu_userq_in in;
 	struct drm_amdgpu_userq_out out;
+	struct drm_amdgpu_userq_out_query_state out_qs;
 };
 
 /* GFX V11 IP specific MQD parameters */
