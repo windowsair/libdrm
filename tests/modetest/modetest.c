@@ -837,6 +837,8 @@ struct plane_arg {
 	bool has_position;
 	int32_t x, y;
 	uint32_t w, h;
+	/* source rectangle within the framebuffer, defaults to the full FB */
+	uint32_t src_x, src_y, src_w, src_h;
 	double scale;
 	unsigned int fb_id;
 	unsigned int old_fb_id;
@@ -1250,8 +1252,8 @@ static int atomic_set_plane(struct device *dev, struct plane_arg *p,
 	old_fb_id = p->fb_id;
 	p->old_fb_id = old_fb_id;
 
-	crtc_w = p->w * p->scale;
-	crtc_h = p->h * p->scale;
+	crtc_w = p->src_w * p->scale;
+	crtc_h = p->src_h * p->scale;
 	if (!p->has_position) {
 		/* Default to the middle of the screen */
 		crtc_x = (crtc->mode->hdisplay - crtc_w) / 2;
@@ -1263,10 +1265,10 @@ static int atomic_set_plane(struct device *dev, struct plane_arg *p,
 
 	add_property(dev, p->plane_id, "FB_ID", p->fb_id);
 	add_property(dev, p->plane_id, "CRTC_ID", p->crtc_id);
-	add_property(dev, p->plane_id, "SRC_X", 0);
-	add_property(dev, p->plane_id, "SRC_Y", 0);
-	add_property(dev, p->plane_id, "SRC_W", p->w << 16);
-	add_property(dev, p->plane_id, "SRC_H", p->h << 16);
+	add_property(dev, p->plane_id, "SRC_X", p->src_x << 16);
+	add_property(dev, p->plane_id, "SRC_Y", p->src_y << 16);
+	add_property(dev, p->plane_id, "SRC_W", p->src_w << 16);
+	add_property(dev, p->plane_id, "SRC_H", p->src_h << 16);
 	add_property(dev, p->plane_id, "CRTC_X", crtc_x);
 	add_property(dev, p->plane_id, "CRTC_Y", crtc_y);
 	add_property(dev, p->plane_id, "CRTC_W", crtc_w);
@@ -1326,8 +1328,8 @@ static int set_plane(struct device *dev, struct plane_arg *p)
 	                 secondary_fill, &p->bo, &p->fb_id))
 		return -1;
 
-	crtc_w = p->w * p->scale;
-	crtc_h = p->h * p->scale;
+	crtc_w = p->src_w * p->scale;
+	crtc_h = p->src_h * p->scale;
 	if (!p->has_position) {
 		/* Default to the middle of the screen */
 		crtc_x = (crtc->mode->hdisplay - crtc_w) / 2;
@@ -1340,7 +1342,8 @@ static int set_plane(struct device *dev, struct plane_arg *p)
 	/* note src coords (last 4 args) are in Q16 format */
 	if (drmModeSetPlane(dev->fd, plane_id, p->crtc_id, p->fb_id,
 			    0, crtc_x, crtc_y, crtc_w, crtc_h,
-			    0, 0, p->w << 16, p->h << 16)) {
+			    p->src_x << 16, p->src_y << 16,
+			    p->src_w << 16, p->src_h << 16)) {
 		fprintf(stderr, "failed to enable plane: %s\n",
 			strerror(errno));
 		return -1;
@@ -1716,6 +1719,8 @@ static unsigned int set_mode(struct device *dev, struct pipe_arg **pipe_args, un
 					.crtc_id = pipe->crtc_id,
 					.w = pipe->mode->hdisplay,
 					.h = pipe->mode->vdisplay,
+					.src_w = pipe->mode->hdisplay,
+					.src_h = pipe->mode->vdisplay,
 					.scale = 1.0,
 					.format_str = "XR24",
 					.fourcc = util_format_fourcc(pipe->format_str),
@@ -2071,6 +2076,34 @@ static int parse_plane(struct plane_arg *plane, const char *p)
 	p = end + 1;
 	plane->h = strtoul(p, &end, 10);
 
+	if (*end == '~') {
+		p = end + 1;
+		plane->src_x = strtoul(p, &end, 10);
+		if (*end != ',')
+			return -EINVAL;
+		p = end + 1;
+		plane->src_y = strtoul(p, &end, 10);
+		if (*end != ',')
+			return -EINVAL;
+		p = end + 1;
+		plane->src_w = strtoul(p, &end, 10);
+		if (*end != ',')
+			return -EINVAL;
+		p = end + 1;
+		plane->src_h = strtoul(p, &end, 10);
+
+		/* the source rectangle must fit within the framebuffer */
+		if (!plane->src_w || !plane->src_h ||
+		    plane->src_x > plane->w || plane->src_w > plane->w - plane->src_x ||
+		    plane->src_y > plane->h || plane->src_h > plane->h - plane->src_y)
+			return -EINVAL;
+	} else {
+		plane->src_x = 0;
+		plane->src_y = 0;
+		plane->src_w = plane->w;
+		plane->src_h = plane->h;
+	}
+
 	if (*end == '+' || *end == '-') {
 		plane->x = strtol(end, &end, 10);
 		if (*end != '+' && *end != '-')
@@ -2150,7 +2183,7 @@ static void usage(char *name)
 	fprintf(stderr, "\t-p\tlist CRTCs and planes (pipes)\n");
 
 	fprintf(stderr, "\n Test options:\n\n");
-	fprintf(stderr, "\t-P <plane_id>@<crtc_id>:<w>x<h>[+<x>+<y>][*<scale>][@<format>]\tset a plane, see 'plane-topology'\n");
+	fprintf(stderr, "\t-P <plane_id>@<crtc_id>:<w>x<h>[~<src_x>,<src_y>,<src_w>,<src_h>][+<x>+<y>][*<scale>][@<format>]\tset a plane, see 'plane-topology'\n");
 	fprintf(stderr, "\t-s <connector_id>[,<connector_id>][@<crtc_id>]:mode[@<format>]\tset a mode, see 'mode-topology'\n");
 	fprintf(stderr, "\t\twhere mode can be specified as:\n");
 	fprintf(stderr, "\t\t<hdisp>x<vdisp>[-<vrefresh>]\n");
@@ -2174,10 +2207,13 @@ static void usage(char *name)
 
 	fprintf(stderr, "\n");
 	fprintf(stderr, "Plane Topology is defined as:\n");
-	fprintf(stderr, "\tplane-topology\t::= plane-id '@' crtc-id ':' width 'x' height ( <plane-offsets> )? ;\n");
+	fprintf(stderr, "\tplane-topology\t::= plane-id '@' crtc-id ':' width 'x' height ( <plane-src-rect> )? ( <plane-offsets> )? ;\n");
+	fprintf(stderr, "\tplane-src-rect\t::= '~' src-x ',' src-y ',' src-width ',' src-height ;\n");
 	fprintf(stderr, "\tplane-offsets\t::= '+' x-offset '+' y-offset ( <plane-scale> )? ;\n");
 	fprintf(stderr, "\tplane-scale\t::= '*' scale ( <plane-format> )? ;\n");
 	fprintf(stderr, "\tplane-format\t::= '@' format ;\n");
+	fprintf(stderr, "\t\tthe source rectangle selects a sub-region of the framebuffer;\n");
+	fprintf(stderr, "\t\tit must fit within width x height and defaults to it in full\n");
 
 	fprintf(stderr, "\n");
 	fprintf(stderr, "Mode Topology is defined as:\n");
